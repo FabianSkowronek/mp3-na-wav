@@ -28,7 +28,13 @@ h1 span { color: var(--accent); }
 .spec { display: flex; flex-wrap: wrap; gap: 8px; }
 .spec b { font-family: var(--mono); font-weight: 500; font-size: .78rem; padding: 5px 10px; border: 1px solid var(--line);
   border-radius: 4px; background: var(--panel); letter-spacing: .02em; }
-.drop { border: 2px dashed var(--line); border-radius: 10px; background: var(--panel); padding: 36px 20px; text-align: center;
+.kroki { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; }
+.kroki h2 { margin: 0 0 10px; font-size: 1.15rem; font-weight: 800; }
+.kroki ol { margin: 0; padding-left: 0; list-style: none; counter-reset: k; display: grid; gap: 10px; }
+.kroki li { counter-increment: k; display: grid; grid-template-columns: 30px minmax(0,1fr); gap: 10px; align-items: start; line-height: 1.5; font-size: .98rem; }
+.kroki li::before { content: counter(k); display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 800; font-size: .9rem; }
+.kroki .tip { margin: 12px 0 0; font-size: .88rem; color: var(--muted); line-height: 1.5; }
+.drop { border: 2px dashed var(--accent); border-radius: 10px; background: var(--panel); padding: 36px 20px; text-align: center;
   cursor: pointer; transition: border-color .15s, background .15s; display: grid; gap: 8px; justify-items: center; }
 .drop:hover, .drop:focus-visible, .drop.over { border-color: var(--accent); outline: none; }
 .drop strong { font-size: 1.15rem; font-weight: 700; }
@@ -44,6 +50,8 @@ h1 span { color: var(--accent); }
 .row .meter i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
 .row.done .meter i { background: var(--ok); }
 .row .pobierz { grid-column: 1 / -1; justify-self: start; font: 700 .9rem var(--display); color: var(--accent); text-decoration: none; border: 1px solid var(--accent); border-radius: 6px; padding: 6px 12px; }
+.zipbtn { font: 700 1rem var(--display); padding: 12px 20px; border-radius: 8px; text-decoration: none; color: var(--accent); border: 2px solid var(--accent); }
+.zipbtn:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
 .row .info { grid-column: 1 / -1; font-family: var(--mono); font-size: .72rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 button { font: 700 1rem var(--display); padding: 12px 20px; border-radius: 8px; border: 0; cursor: pointer; background: var(--accent); color: #fff; }
@@ -64,6 +72,17 @@ button:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 45%, 
   </header>
   <div class="spec" aria-label="Format wyjściowy"><b>96 000 Hz</b><b>24-bit PCM</b><b>kanały jak w źródle</b><b>.wav</b></div>
 
+
+  <section class="kroki" aria-labelledby="jak">
+    <h2 id="jak">Jak to zrobić — 4 kroki</h2>
+    <ol>
+      <li><span><b>Znajdź swoją piosenkę MP3</b> na komputerze (np. w folderze Pobrane).</span></li>
+      <li><span><b>Przeciągnij ją myszką</b> do pomarańczowej ramki niżej. Albo kliknij w ramkę i wybierz plik. Możesz dodać kilka naraz.</span></li>
+      <li><span><b>Kliknij duży pomarańczowy przycisk</b> „Konwertuj i zapisz”. Poczekaj, aż pasek zrobi się zielony i pojawi się napis „gotowe”.</span></li>
+      <li><span><b>Pobierz plik:</b> kliknij „Pobierz WAV” przy piosence albo „Pobierz wszystko jako ZIP”, żeby dostać wszystkie naraz. Plik znajdziesz w folderze <b>Pobrane</b>.</span></li>
+    </ol>
+    <p class="tip">ZIP to paczka z plikami. Kliknij ją dwa razy, a otworzy się folder z gotowymi WAV-ami. Telefon? Lepiej użyj komputera — duże pliki WAV mogą nie zmieścić się w pamięci telefonu.</p>
+  </section>
   <label class="drop" id="drop" tabindex="0" for="pick">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>
     <strong>Przeciągnij tu pliki MP3</strong>
@@ -75,6 +94,7 @@ button:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 45%, 
 
   <div class="bar">
     <button id="go" disabled>Konwertuj i zapisz</button>
+    <a id="zip" class="zipbtn" hidden>Pobierz wszystko jako ZIP</a>
     <button id="clear" class="ghost" hidden>Wyczyść listę</button>
   </div>
   <p class="msg" id="msg" role="status"></p>
@@ -143,6 +163,31 @@ function wav24(ab) {
   return new Uint8Array(out);
 }
 
+// Minimalny ZIP bez kompresji (metoda „store”)
+const CRC = (() => { const t = new Uint32Array(256); for (let i = 0; i < 256; i++) { let c = i; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[i] = c >>> 0; } return t; })();
+function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC[(c ^ u8[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function zip(wpisy) {
+  const enc = new TextEncoder(), czesci = [], central = []; let off = 0;
+  for (const w of wpisy) {
+    const nazwa = enc.encode(w.name), crc = crc32(w.data), size = w.data.length;
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true);
+    lh.setUint32(14, crc, true); lh.setUint32(18, size, true); lh.setUint32(22, size, true); lh.setUint16(26, nazwa.length, true);
+    czesci.push(new Uint8Array(lh.buffer), nazwa, w.data);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true);
+    ch.setUint32(16, crc, true); ch.setUint32(20, size, true); ch.setUint32(24, size, true); ch.setUint16(28, nazwa.length, true);
+    ch.setUint32(42, off, true);
+    central.push(new Uint8Array(ch.buffer), nazwa);
+    off += 30 + nazwa.length + size;
+  }
+  const cdSize = central.reduce((a, b) => a + b.length, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, wpisy.length, true); end.setUint16(10, wpisy.length, true);
+  end.setUint32(12, cdSize, true); end.setUint32(16, off, true);
+  return new Blob([...czesci, ...central, new Uint8Array(end.buffer)]);
+}
+
 async function konwertuj() {
   $('go').disabled = true; $('clear').disabled = true;
   const msg = $('msg'); msg.className = 'msg'; msg.textContent = 'Konwertuję…';
@@ -170,6 +215,10 @@ async function konwertuj() {
     w.row.appendChild(a);
     if (wyniki.length === 1) a.click();
   }
+  const zipBlob = zip(wyniki.map(w => ({ name: w.name, data: w.data })));
+  const zipA = $('zip'); zipA.href = URL.createObjectURL(zipBlob);
+  zipA.download = wyniki.length === 1 ? wyniki[0].name.replace(/\.wav$/, '') + '.zip' : `WAV 96kHz (${wyniki.length} pliki).zip`;
+  zipA.textContent = `Pobierz wszystko jako ZIP (${fmtMB(zipBlob.size)})`; zipA.hidden = false;
   msg.className = 'msg ok';
   msg.textContent = wyniki.length === 1 ? 'Gotowe — pobieranie powinno ruszyć samo. Jeśli nie, kliknij „Pobierz WAV”.' : `Gotowe: ${wyniki.length} pliki. Kliknij „Pobierz WAV” przy każdym.`;
   $('clear').disabled = false;
@@ -182,7 +231,7 @@ drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove
 drop.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('pick').click(); } });
 $('pick').addEventListener('change', (e) => { dodaj(e.target.files); e.target.value = ''; });
 $('go').addEventListener('click', konwertuj);
-$('clear').addEventListener('click', () => { pliki = []; $('list').innerHTML = ''; $('msg').textContent = ''; odswiez(); });
+$('clear').addEventListener('click', () => { $('zip').hidden = true; pliki = []; $('list').innerHTML = ''; $('msg').textContent = ''; odswiez(); });
 </script>
 
 </body></html>
