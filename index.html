@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MP3 → WAV 96 kHz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+body{margin:0}
+/* Layout: jedna kolumna jak panel urządzenia audio — strefa upuszczania, lista plików z miernikami, jeden przycisk. */
+:root {
+  --bg: #eef0f2; --panel: #ffffff; --ink: #14181d; --muted: #5d6874; --line: #d5dae0;
+  --accent: #e8590c; --ok: #2b8a3e; --err: #c92a2a; --meter: #e9ecef;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1215; --panel: #171b20; --ink: #e9edf1; --muted: #8a96a3; --line: #2a3139;
+  --accent: #ff7a2f; --ok: #51cf66; --err: #ff6b6b; --meter: #222830; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f1215; --panel: #171b20; --ink: #e9edf1; --muted: #8a96a3; --line: #2a3139;
+  --accent: #ff7a2f; --ok: #51cf66; --err: #ff6b6b; --meter: #222830; color-scheme: dark }
+body { background: var(--bg); color: var(--ink); font-family: var(--display); }
+.wrap { max-width: 720px; margin: 0 auto; padding-block: 40px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 20px; }
+h1 { font-size: clamp(1.9rem, 5vw, 2.6rem); font-weight: 800; letter-spacing: -.02em; margin: 0; text-wrap: balance; }
+h1 span { color: var(--accent); }
+.lead { margin: 6px 0 0; color: var(--muted); font-size: 1rem; line-height: 1.5; max-width: 60ch; }
+.spec { display: flex; flex-wrap: wrap; gap: 8px; }
+.spec b { font-family: var(--mono); font-weight: 500; font-size: .78rem; padding: 5px 10px; border: 1px solid var(--line);
+  border-radius: 4px; background: var(--panel); letter-spacing: .02em; }
+.drop { border: 2px dashed var(--line); border-radius: 10px; background: var(--panel); padding: 36px 20px; text-align: center;
+  cursor: pointer; transition: border-color .15s, background .15s; display: grid; gap: 8px; justify-items: center; }
+.drop:hover, .drop:focus-visible, .drop.over { border-color: var(--accent); outline: none; }
+.drop strong { font-size: 1.15rem; font-weight: 700; }
+.drop small { color: var(--muted); font-size: .85rem; }
+.drop svg { width: 44px; height: 44px; color: var(--accent); }
+.list { display: grid; gap: 8px; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 14px; align-items: center; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.row .name { font-weight: 700; font-size: .95rem; overflow-wrap: anywhere; min-width: 0; }
+.row .st { font-family: var(--mono); font-size: .75rem; color: var(--muted); white-space: nowrap; }
+.row .st.ok { color: var(--ok); } .row .st.err { color: var(--err); }
+.row .meter { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: var(--meter); overflow: hidden; }
+.row .meter i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+.row.done .meter i { background: var(--ok); }
+.row .pobierz { grid-column: 1 / -1; justify-self: start; font: 700 .9rem var(--display); color: var(--accent); text-decoration: none; border: 1px solid var(--accent); border-radius: 6px; padding: 6px 12px; }
+.row .info { grid-column: 1 / -1; font-family: var(--mono); font-size: .72rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+button { font: 700 1rem var(--display); padding: 12px 20px; border-radius: 8px; border: 0; cursor: pointer; background: var(--accent); color: #fff; }
+button.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
+.msg { font-size: .9rem; color: var(--muted); min-height: 1.3em; margin: 0; }
+.msg.err { color: var(--err); } .msg.ok { color: var(--ok); }
+.note { font-size: .82rem; color: var(--muted); line-height: 1.55; border-top: 1px solid var(--line); padding-top: 16px; margin: 0; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head><body>
+
+<div class="wrap">
+  <header>
+    <h1>MP3 → WAV <span>96 kHz</span></h1>
+    <p class="lead">Wrzuć pliki MP3, a dostaniesz WAV-y 96 kHz / 24-bit. Konwersja dzieje się w Twojej przeglądarce — pliki nigdzie nie są wysyłane.</p>
+  </header>
+  <div class="spec" aria-label="Format wyjściowy"><b>96 000 Hz</b><b>24-bit PCM</b><b>kanały jak w źródle</b><b>.wav</b></div>
+
+  <label class="drop" id="drop" tabindex="0" for="pick">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>
+    <strong>Przeciągnij tu pliki MP3</strong>
+    <small>albo kliknij, żeby wybrać — można kilka naraz</small>
+  </label>
+  <input id="pick" type="file" accept=".mp3,audio/mpeg" multiple hidden>
+
+  <div class="list" id="list"></div>
+
+  <div class="bar">
+    <button id="go" disabled>Konwertuj i zapisz</button>
+    <button id="clear" class="ghost" hidden>Wyczyść listę</button>
+  </div>
+  <p class="msg" id="msg" role="status"></p>
+
+  <p class="note">MP3 jest formatem stratnym: zapis w 96 kHz zmienia format pliku, ale nie przywraca szczegółów, które MP3 usunął przy kompresji. Przydaje się, gdy program albo sprzęt wymaga WAV 96 kHz. Duże pliki zajmują dużo miejsca: 1 minuta stereo w 96 kHz / 24-bit to ok. 33 MB.</p>
+</div>
+
+<script>
+const RATE = 96000;
+const $ = (id) => document.getElementById(id);
+let pliki = [];   // {file, row}
+
+function fmtMB(b) { return (b / 1048576).toFixed(1).replace('.', ',') + ' MB'; }
+function fmtCzas(s) { const m = Math.floor(s / 60), r = Math.round(s % 60); return m + ':' + String(r).padStart(2, '0'); }
+
+function dodaj(lista) {
+  for (const f of lista) {
+    if (!/\.mp3$/i.test(f.name) && f.type !== 'audio/mpeg') continue;
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = '<span class="name"></span><span class="st">czeka</span><div class="meter"><i></i></div><span class="info"></span>';
+    row.querySelector('.name').textContent = f.name;
+    row.querySelector('.info').textContent = 'MP3 · ' + fmtMB(f.size);
+    $('list').appendChild(row);
+    pliki.push({ file: f, row });
+  }
+  odswiez();
+}
+function odswiez() {
+  $('go').disabled = pliki.length === 0;
+  $('clear').hidden = pliki.length === 0;
+  $('go').textContent = pliki.length > 1 ? `Konwertuj ${pliki.length} pliki i zapisz` : 'Konwertuj i zapisz';
+}
+function stan(p, tekst, cls, proc) {
+  const st = p.row.querySelector('.st'); st.textContent = tekst; st.className = 'st' + (cls ? ' ' + cls : '');
+  if (proc != null) p.row.querySelector('.meter i').style.width = proc + '%';
+  if (cls === 'ok') p.row.classList.add('done');
+}
+
+// MP3 → AudioBuffer od razu w 96 kHz (przeglądarka dekoduje i przelicza częstotliwość)
+async function dekoduj(file) {
+  const buf = await file.arrayBuffer();
+  const ctx = new OfflineAudioContext(2, 1, RATE);
+  return await ctx.decodeAudioData(buf);
+}
+
+// AudioBuffer → WAV 24-bit PCM (little-endian), z lekkim ditherem TPDF
+function wav24(ab) {
+  const ch = ab.numberOfChannels, n = ab.length, bps = 3;
+  const dane = n * ch * bps, out = new ArrayBuffer(44 + dane), v = new DataView(out);
+  const s = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+  s(0, 'RIFF'); v.setUint32(4, 36 + dane, true); s(8, 'WAVE');
+  s(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, ch, true);
+  v.setUint32(24, RATE, true); v.setUint32(28, RATE * ch * bps, true); v.setUint16(32, ch * bps, true); v.setUint16(34, 24, true);
+  s(36, 'data'); v.setUint32(40, dane, true);
+  const kan = []; for (let c = 0; c < ch; c++) kan.push(ab.getChannelData(c));
+  let o = 44;
+  for (let i = 0; i < n; i++) {
+    for (let c = 0; c < ch; c++) {
+      let x = kan[c][i] * 8388607 + (Math.random() - Math.random());
+      x = Math.max(-8388608, Math.min(8388607, Math.round(x)));
+      v.setUint8(o, x & 255); v.setUint8(o + 1, (x >> 8) & 255); v.setUint8(o + 2, (x >> 16) & 255);
+      o += 3;
+    }
+  }
+  return new Uint8Array(out);
+}
+
+async function konwertuj() {
+  $('go').disabled = true; $('clear').disabled = true;
+  const msg = $('msg'); msg.className = 'msg'; msg.textContent = 'Konwertuję…';
+  const wyniki = [];
+  for (const p of pliki) {
+    try {
+      stan(p, 'dekoduję', '', 25);
+      await new Promise(r => setTimeout(r, 30));
+      const ab = await dekoduj(p.file);
+      stan(p, 'zapisuję WAV', '', 65);
+      await new Promise(r => setTimeout(r, 30));
+      const dane = wav24(ab);
+      wyniki.push({ name: p.file.name.replace(/\.mp3$/i, '') + ' (96kHz 24bit).wav', data: dane, row: p.row });
+      stan(p, 'gotowe', 'ok', 100);
+      p.row.querySelector('.info').textContent = `WAV · ${fmtCzas(ab.duration)} · ${ab.numberOfChannels === 1 ? 'mono' : ab.numberOfChannels === 2 ? 'stereo' : ab.numberOfChannels + ' kanały'} · ${fmtMB(dane.length)}`;
+    } catch (e) {
+      stan(p, 'błąd', 'err', 100);
+      p.row.querySelector('.info').textContent = 'Nie udało się odczytać tego pliku jako MP3.';
+    }
+  }
+  if (!wyniki.length) { msg.className = 'msg err'; msg.textContent = 'Żaden plik się nie przekonwertował. Sprawdź, czy to na pewno MP3.'; $('clear').disabled = false; return; }
+  for (const [k, w] of wyniki.entries()) {
+    const url = URL.createObjectURL(new Blob([w.data], { type: 'audio/wav' }));
+    const a = document.createElement('a'); a.href = url; a.download = w.name; a.className = 'pobierz'; a.textContent = 'Pobierz WAV';
+    w.row.appendChild(a);
+    if (wyniki.length === 1) a.click();
+  }
+  msg.className = 'msg ok';
+  msg.textContent = wyniki.length === 1 ? 'Gotowe — pobieranie powinno ruszyć samo. Jeśli nie, kliknij „Pobierz WAV”.' : `Gotowe: ${wyniki.length} pliki. Kliknij „Pobierz WAV” przy każdym.`;
+  $('clear').disabled = false;
+}
+
+const drop = $('drop');
+drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); dodaj(e.dataTransfer.files); });
+drop.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('pick').click(); } });
+$('pick').addEventListener('change', (e) => { dodaj(e.target.files); e.target.value = ''; });
+$('go').addEventListener('click', konwertuj);
+$('clear').addEventListener('click', () => { pliki = []; $('list').innerHTML = ''; $('msg').textContent = ''; odswiez(); });
+</script>
+
+</body></html>
